@@ -1,0 +1,162 @@
+import fs from 'fs';
+import yaml from 'js-yaml';
+import logger from './logger';
+
+export interface ServiceEntry {
+  vault: {
+    kv2_mount: string;
+    kv2_path: string;
+  };
+  authz?: {
+    keycloak?: {
+      resource_id?: string;
+      scope?: string;
+    };
+  };
+  wrap: {
+    max_ttl: string;
+    default_ttl: string;
+  };
+}
+
+export interface ServiceRegistry {
+  services: Record<string, ServiceEntry>;
+}
+
+export interface Config {
+  keycloak: {
+    issuerURL: string;
+    realm: string;
+    clientID: string;
+    clientSecret: string;
+    audience: string;
+  };
+  vault: {
+    addr: string;
+    k8sAuthPath: string;
+    k8sRole: string;
+    k8sJWTPath: string;
+  };
+  wrapTokenEncKey: Buffer;
+  listenAddr: string;
+  listenPort: number;
+  approver: {
+    username: string;
+    password: string;
+    redirectURI: string;
+    loginTimeout: number;
+    duoTimeout: number;
+  };
+  playwright: {
+    headless: boolean;
+    browser: string;
+  };
+  serviceRegistry: ServiceRegistry;
+  configPath: string;
+}
+
+function parseDuration(s: string, defaultMs: number): number {
+  if (!s) return defaultMs;
+  const match = s.match(/^(\d+)(ms|s|m|h)?$/);
+  if (!match) return defaultMs;
+  const val = parseInt(match[1], 10);
+  switch (match[2]) {
+    case 'h':
+      return val * 3600_000;
+    case 'm':
+      return val * 60_000;
+    case 's':
+      return val * 1000;
+    case 'ms':
+      return val;
+    default:
+      return val * 1000;
+  }
+}
+
+export function parseTTL(s: string): number {
+  return parseDuration(s, 0);
+}
+
+export function capTTL(requestedTTL: string | undefined, service: ServiceEntry): number {
+  const maxMs = parseTTL(service.wrap.max_ttl);
+  const defaultMs = parseTTL(service.wrap.default_ttl);
+  if (!requestedTTL) return defaultMs;
+  const requestedMs = parseTTL(requestedTTL);
+  if (requestedMs <= 0) return defaultMs;
+  return Math.min(requestedMs, maxMs);
+}
+
+export function ttlToVaultString(ms: number): string {
+  if (ms >= 3600_000 && ms % 3600_000 === 0) return `${ms / 3600_000}h`;
+  if (ms >= 60_000 && ms % 60_000 === 0) return `${ms / 60_000}m`;
+  return `${Math.ceil(ms / 1000)}s`;
+}
+
+function loadServiceRegistry(configPath: string): ServiceRegistry {
+  const raw = fs.readFileSync(configPath, 'utf-8');
+  const parsed = yaml.load(raw) as ServiceRegistry;
+  if (!parsed || !parsed.services) {
+    throw new Error(`Invalid service registry at ${configPath}: missing 'services' key`);
+  }
+  return parsed;
+}
+
+function requireEnv(name: string): string {
+  const val = process.env[name];
+  if (!val) throw new Error(`Required environment variable ${name} is not set`);
+  return val;
+}
+
+export function loadConfig(): Config {
+  const encKeyHex = requireEnv('WRAPTOKEN_ENC_KEY');
+  if (!/^[0-9a-fA-F]{64}$/.test(encKeyHex)) {
+    throw new Error('WRAPTOKEN_ENC_KEY must be exactly 64 hex characters (32 bytes)');
+  }
+
+  const configPath = process.env.BROKER_CONFIG_PATH || '/etc/x-pass/config.yaml';
+
+  const listenAddr = process.env.BROKER_LISTEN_ADDR || ':8080';
+  const portMatch = listenAddr.match(/:(\d+)$/);
+  const listenPort = portMatch ? parseInt(portMatch[1], 10) : 8080;
+
+  const registry = loadServiceRegistry(configPath);
+
+  return {
+    keycloak: {
+      issuerURL: requireEnv('KEYCLOAK_ISSUER_URL'),
+      realm: process.env.KEYCLOAK_REALM || '',
+      clientID: requireEnv('KEYCLOAK_CLIENT_ID'),
+      clientSecret: requireEnv('KEYCLOAK_CLIENT_SECRET'),
+      audience: process.env.KEYCLOAK_AUDIENCE || '',
+    },
+    vault: {
+      addr: requireEnv('VAULT_ADDR'),
+      k8sAuthPath: process.env.VAULT_K8S_AUTH_PATH || 'auth/kubernetes',
+      k8sRole: requireEnv('VAULT_K8S_ROLE'),
+      k8sJWTPath: process.env.VAULT_K8S_JWT_PATH || '/var/run/secrets/kubernetes.io/serviceaccount/token',
+    },
+    wrapTokenEncKey: Buffer.from(encKeyHex, 'hex'),
+    listenAddr,
+    listenPort,
+    approver: {
+      username: requireEnv('KC_APPROVER_USERNAME'),
+      password: requireEnv('KC_APPROVER_PASSWORD'),
+      redirectURI: process.env.KC_OIDC_REDIRECT_URI || 'http://localhost:8080/oidc/callback',
+      loginTimeout: parseDuration(process.env.KC_LOGIN_TIMEOUT || '2m', 120_000),
+      duoTimeout: parseDuration(process.env.KC_DUO_TIMEOUT || '5m', 300_000),
+    },
+    playwright: {
+      headless: process.env.PLAYWRIGHT_HEADLESS !== 'false',
+      browser: process.env.PLAYWRIGHT_BROWSER || 'chromium',
+    },
+    serviceRegistry: registry,
+    configPath,
+  };
+}
+
+export function validateServiceExists(config: Config, serviceName: string): ServiceEntry | null {
+  return config.serviceRegistry.services[serviceName] || null;
+}
+
+logger.debug('Config module loaded');

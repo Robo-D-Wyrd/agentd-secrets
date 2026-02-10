@@ -1,0 +1,19 @@
+services:
+  payroll-db:
+    vault:
+      kv2_mount: "secret"
+      kv2_path: "prod/payroll/db"
+    authz:
+      keycloak:
+        resource_id: "vault:payroll-db"
+        scope: "read"
+    wrap:
+      max_ttl: "10m"
+      default_ttl: "5m"
+  test-service:
+    vault:
+      kv2_mount: "secret"
+      kv2_path: "dev/test/creds"
+    wrap:
+      max_ttl: "5m"
+      default_ttl: "2m"

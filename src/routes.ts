@@ -93,6 +93,10 @@ export function createHealthRouter(config: Config, vaultClient: VaultClient): Ro
       if (kcOk && vaultOk) {
         res.json({ status: 'ready', keycloak: 'ok', vault: 'ok' });
       } else {
+        logger.warn('Readiness check failed', {
+          keycloak: kcOk ? 'ok' : 'unreachable',
+          vault: vaultOk ? 'ok' : 'unreachable',
+        });
         res.status(503).json({
           status: 'not ready',
           keycloak: kcOk ? 'ok' : 'unreachable',
@@ -100,6 +104,7 @@ export function createHealthRouter(config: Config, vaultClient: VaultClient): Ro
         });
       }
     } catch (err) {
+      logger.error('Readiness check error', { error: (err as Error).message });
       res.status(503).json({ status: 'not ready', error: (err as Error).message });
     }
   });

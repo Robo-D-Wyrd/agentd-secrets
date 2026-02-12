@@ -138,14 +138,26 @@ export class VaultClient {
   }
 
   async checkHealth(): Promise<boolean> {
+    const url = `${this.addr}/v1/sys/health`;
     try {
-      const resp = await fetch(`${this.addr}/v1/sys/health`, {
+      const resp = await fetch(url, {
         method: 'GET',
         signal: AbortSignal.timeout(5000),
       });
       // Vault returns 200 for initialized+unsealed, 429 for standby, 472/473 for other states
-      return resp.status === 200 || resp.status === 429;
-    } catch {
+      if (resp.status === 200 || resp.status === 429) {
+        return true;
+      }
+      logger.warn('Vault health check returned unexpected status', {
+        url,
+        status: resp.status,
+      });
+      return false;
+    } catch (err) {
+      logger.warn('Vault readiness check failed', {
+        url,
+        error: (err as Error).message,
+      });
       return false;
     }
   }

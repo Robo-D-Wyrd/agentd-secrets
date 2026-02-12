@@ -94,10 +94,15 @@ export async function exchangeCode(
 }
 
 export async function checkKeycloakReachable(issuerURL: string): Promise<boolean> {
+  const discoveryURL = `${issuerURL.replace(/\/$/, '')}/.well-known/openid-configuration`;
   try {
     await fetchOIDCDiscovery(issuerURL);
     return true;
-  } catch {
+  } catch (err) {
+    logger.warn('Keycloak readiness check failed', {
+      url: discoveryURL,
+      error: (err as Error).message,
+    });
     return false;
   }
 }

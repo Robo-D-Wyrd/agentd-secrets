@@ -10,7 +10,7 @@ describe('JWT Middleware', () => {
   let privateKey: jose.KeyLike;
   let publicKey: jose.KeyLike;
   let issuer: string;
-  const audience = 'x-pass';
+  const audience = 'agent-secretd';
 
   beforeAll(async () => {
     // Generate RSA key pair for signing test JWTs

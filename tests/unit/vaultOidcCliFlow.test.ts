@@ -177,7 +177,7 @@ describe('getVaultAuthUrl', () => {
     const result = await getVaultAuthUrl(
       `http://127.0.0.1:${vaultPort}`,
       'oidc',
-      'wyrd-x-pass',
+      'agent-secretd',
       'http://localhost:8250/oidc/callback',
       'test-nonce',
     );
@@ -200,7 +200,7 @@ describe('getVaultAuthUrl', () => {
       getVaultAuthUrl(
         `http://127.0.0.1:${vaultPort}`,
         'oidc',
-        'wyrd-x-pass',
+        'agent-secretd',
         'http://localhost:8250/oidc/callback',
         'test-nonce',
       ),
@@ -222,7 +222,7 @@ describe('getVaultAuthUrl', () => {
       getVaultAuthUrl(
         `http://127.0.0.1:${vaultPort}`,
         'oidc',
-        'wyrd-x-pass',
+        'agent-secretd',
         'http://localhost:8250/oidc/callback',
         'test-nonce',
       ),
@@ -252,7 +252,7 @@ describe('exchangeVaultCallback', () => {
             lease_duration: 3600,
             renewable: true,
             accessor: 'test-accessor',
-            policies: ['default', 'x-pass-read'],
+            policies: ['default', 'agent-secretd-read'],
           },
         }));
       } else {
@@ -277,7 +277,7 @@ describe('exchangeVaultCallback', () => {
     expect(result.auth.client_token).toBe('hvs.test-vault-token');
     expect(result.auth.lease_duration).toBe(3600);
     expect(result.auth.renewable).toBe(true);
-    expect(result.auth.policies).toContain('x-pass-read');
+    expect(result.auth.policies).toContain('agent-secretd-read');
   });
 
   test('passes state, code, and client_nonce as query parameters', async () => {
@@ -374,7 +374,7 @@ describe('VaultOidcManager', () => {
               lease_duration: 3600,
               renewable: true,
               accessor: 'test-accessor',
-              policies: ['default', 'x-pass-read'],
+              policies: ['default', 'agent-secretd-read'],
             },
           }));
         } else {
@@ -396,7 +396,7 @@ describe('VaultOidcManager', () => {
     return {
       vaultAddr: `http://127.0.0.1:${vaultPort}`,
       oidcMount: 'oidc',
-      oidcRole: 'wyrd-x-pass',
+      oidcRole: 'agent-secretd',
       callbackListenHost: '127.0.0.1',
       callbackListenPort: callbackPort,
       redirectURI: `http://127.0.0.1:${callbackPort}/oidc/callback`,

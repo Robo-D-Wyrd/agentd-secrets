@@ -10,12 +10,12 @@ describe('Config', () => {
       ...originalEnv,
       KEYCLOAK_ISSUER_URL: 'https://keycloak.example.com/realms/myrealm',
       KEYCLOAK_REALM: 'myrealm',
-      KEYCLOAK_CLIENT_ID: 'x-pass',
+      KEYCLOAK_CLIENT_ID: 'agent-secretd',
       KEYCLOAK_CLIENT_SECRET: 'test-secret',
-      KEYCLOAK_AUDIENCE: 'x-pass',
+      KEYCLOAK_AUDIENCE: 'agent-secretd',
       VAULT_ADDR: 'https://vault.example.com',
       VAULT_OIDC_MOUNT: 'oidc',
-      VAULT_OIDC_ROLE: 'wyrd-x-pass',
+      VAULT_OIDC_ROLE: 'agent-secretd',
       VAULT_KV_MOUNT: 'secret',
       VAULT_WRAP_TTL: '300s',
       WRAPTOKEN_ENC_KEY: 'a'.repeat(64),
@@ -37,10 +37,10 @@ describe('Config', () => {
     const { loadConfig } = require('../../src/config');
     const config = loadConfig();
     expect(config.keycloak.issuerURL).toBe('https://keycloak.example.com/realms/myrealm');
-    expect(config.keycloak.clientID).toBe('x-pass');
+    expect(config.keycloak.clientID).toBe('agent-secretd');
     expect(config.vault.addr).toBe('https://vault.example.com');
     expect(config.vault.oidcMount).toBe('oidc');
-    expect(config.vault.oidcRole).toBe('wyrd-x-pass');
+    expect(config.vault.oidcRole).toBe('agent-secretd');
     expect(config.vault.kvMount).toBe('secret');
     expect(config.vault.wrapTTL).toBe('300s');
     expect(config.oidcCallback.listenHost).toBe('127.0.0.1');
@@ -112,7 +112,7 @@ describe('validateServiceExists', () => {
     process.env = {
       ...originalEnv,
       KEYCLOAK_ISSUER_URL: 'https://keycloak.example.com/realms/myrealm',
-      KEYCLOAK_CLIENT_ID: 'x-pass',
+      KEYCLOAK_CLIENT_ID: 'agent-secretd',
       KEYCLOAK_CLIENT_SECRET: 'secret',
       VAULT_ADDR: 'https://vault.example.com',
       WRAPTOKEN_ENC_KEY: 'a'.repeat(64),

@@ -11,7 +11,7 @@ import { createApiRouter, createHealthRouter } from './routes';
 import logger from './logger';
 
 async function main() {
-  logger.info('Starting x-pass broker');
+  logger.info('Starting agent-secretd broker');
 
   const config = loadConfig();
 
@@ -74,7 +74,7 @@ async function main() {
 
   // Start server
   const server = app.listen(config.listenPort, () => {
-    logger.info(`x-pass broker listening on ${config.listenAddr}`);
+    logger.info(`agent-secretd broker listening on ${config.listenAddr}`);
   });
 
   // Graceful shutdown

@@ -2,14 +2,14 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "x-pass.fullname" . }}
+  name: {{ include "agent-secretd.fullname" . }}
   labels:
-    {{- include "x-pass.labels" . | nindent 4 }}
+    {{- include "agent-secretd.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "x-pass.fullname" . }}
+    name: {{ include "agent-secretd.fullname" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:

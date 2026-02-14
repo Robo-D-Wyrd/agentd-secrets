@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: x-pass
+  repository: agent-secretd
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
@@ -40,7 +40,7 @@ ingress:
   className: ""
   annotations: {}
   hosts:
-    - host: x-pass.example.local
+    - host: agent-secretd.example.local
       paths:
         - path: /
           pathType: Prefix
@@ -64,7 +64,7 @@ vault:
   # -- Vault OIDC auth mount path
   oidcMount: "oidc"
   # -- Vault OIDC auth role name
-  oidcRole: "wyrd-x-pass"
+  oidcRole: "agent-secretd"
   # -- KV v2 mount path used by the broker to read secrets
   kvMount: "secret"
   # -- Default wrap TTL for response-wrapped secret reads

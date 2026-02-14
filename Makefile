@@ -11,10 +11,10 @@ IMAGE_REF = $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 .PHONY: init configure build push clean create-secret vault-setup
 
 init:
-	bin/xpass-admin.py init $(INIT_ARGS)
+	bin/agent-secretd-admin.py init $(INIT_ARGS)
 
 configure:
-	bin/xpass-admin.py configure
+	bin/agent-secretd-admin.py configure
 
 build:
 	docker build --platform=linux/amd64 -t $(IMAGE_REF) .
@@ -26,7 +26,7 @@ clean:
 	-docker rmi $(IMAGE_REF)
 
 create-secret:
-	bin/xpass-admin.py create-secret $(SECRET_ARGS)
+	bin/agent-secretd-admin.py create-secret $(SECRET_ARGS)
 
 vault-setup:
-	bin/xpass-admin.py vault-setup $(VAULT_ARGS)
+	bin/agent-secretd-admin.py vault-setup $(VAULT_ARGS)

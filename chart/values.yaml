@@ -102,20 +102,17 @@ playwright:
   browser: "chromium"
 
 # -- Service registry YAML mounted into the pod.
-# Defines which services the broker can mediate and their Vault/OIDC mappings.
-# See config.example.yaml for the full schema.
+# Defines which secrets the broker can access and their Vault KV paths.
+# Sub-key addressing: one entry covers many secrets. Requesting "logins/google"
+# matches the "logins" entry and reads <kv2_path>/google from Vault.
 serviceRegistry:
-  # payroll-db:
+  # logins:
   #   vault:
-  #     kv2_mount: "secret"
-  #     kv2_path: "prod/payroll/db"
-  #   authz:
-  #     oidc:
-  #       resource_id: "vault:payroll-db"
-  #       scope: "read"
+  #     kv2_path: "wyrd/logins"       # Vault KV v2 path prefix
+  #     # kv2_mount: "secret"         # Optional: per-service KV mount override (defaults to vault.kvMount)
   #   wrap:
-  #     max_ttl: "10m"
-  #     default_ttl: "5m"
+  #     max_ttl: "300s"
+  #     default_ttl: "60s"
 
 resources: {}
   # limits:

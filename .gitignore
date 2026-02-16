@@ -4,5 +4,6 @@ coverage/
 *.js.map
 .env
 .env.*
+__pycache__/
 build-config.json
 agentd-secrets-config.yaml

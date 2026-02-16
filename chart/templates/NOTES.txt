@@ -18,11 +18,28 @@ agentd-secrets has been deployed.
   echo http://$SERVICE_IP:{{ .Values.service.port }}
 {{- else if contains "ClusterIP" .Values.service.type }}
   kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "agentd-secrets.fullname" . }} 8080:{{ .Values.service.port }}
-  echo "Healthz:  http://127.0.0.1:8080/healthz"
-  echo "Readyz:   http://127.0.0.1:8080/readyz"
 {{- end }}
 
-2. Ensure the secret "{{ .Values.existingSecret | default (printf "%s-secrets" (include "agentd-secrets.fullname" .)) }}" contains:
+2. Verify the deployment:
+
+  # Service discovery (returns full API schema)
+  curl http://127.0.0.1:8080/
+
+  # Health checks
+  curl http://127.0.0.1:8080/healthz
+  curl http://127.0.0.1:8080/readyz
+
+3. Test the OIDC login flow (triggers Duo MFA push):
+
+  curl -X POST http://127.0.0.1:8080/diag/test-login
+
+4. Test reading a secret:
+
+  curl -X POST http://127.0.0.1:8080/diag/test-read \
+    -H 'Content-Type: application/json' \
+    -d '{"service": "SERVICE_NAME"}'
+
+5. Ensure the secret "{{ .Values.existingSecret | default (printf "%s-secrets" (include "agentd-secrets.fullname" .)) }}" contains:
    - WRAPTOKEN_ENC_KEY
    - OIDC_USERNAME
    - OIDC_PASSWORD

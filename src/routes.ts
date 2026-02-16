@@ -78,6 +78,39 @@ export function createApiRouter(
 export function createHealthRouter(config: Config, vaultClient: VaultClient): Router {
   const router = Router();
 
+  // GET / — service discovery
+  router.get('/', (_req: Request, res: Response) => {
+    res.json({
+      service: 'agentd-secrets',
+      description: 'Secret broker that mediates access to Vault secrets via OIDC-authenticated requests with human-in-the-loop MFA approval.',
+      version: '0.1.0',
+      endpoints: {
+        'POST /v1/requests': {
+          auth: 'Bearer JWT (from OIDC provider)',
+          description: 'Request access to a secret. Returns a request_id to poll.',
+          body: {
+            service: 'string (required) — secret name, supports prefix/subkey e.g. "logins/google"',
+            reason: 'string (required) — justification for access',
+            requester: 'string (required) — caller identity',
+            wrap_ttl: 'string (optional) — requested wrap TTL e.g. "5m", "300s"',
+          },
+          response: '202 { request_id, status }',
+        },
+        'GET /v1/requests/:id': {
+          auth: 'Bearer JWT (from OIDC provider)',
+          description: 'Poll request status. When APPROVED, response includes a Vault wrap_token.',
+          response: '200 { request_id, service, requester, status, created_at, wrap_token?, wrap_expires_at?, failure_reason? }',
+          statuses: ['PENDING_APPROVAL', 'APPROVED', 'DENIED', 'EXPIRED', 'FAILED'],
+          usage: 'Use wrap_token with Vault unwrap API: POST <vault_addr>/v1/sys/wrapping/unwrap with X-Vault-Token header. The wrap_token is single-use.',
+        },
+        'GET /healthz': { auth: 'none', description: 'Liveness check' },
+        'GET /readyz': { auth: 'none', description: 'Readiness check (OIDC + Vault connectivity)' },
+      },
+      services: Object.keys(config.serviceRegistry.services),
+      oidc_issuer: config.oidc.issuerURL,
+    });
+  });
+
   // GET /healthz — liveness
   router.get('/healthz', (_req: Request, res: Response) => {
     res.json({ status: 'ok' });

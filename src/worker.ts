@@ -1,4 +1,4 @@
-import { Config, capTTL, ttlToVaultString, validateServiceExists } from './config';
+import { Config, capTTL, ttlToVaultString, resolveService } from './config';
 import { encrypt } from './encryption';
 import { RequestStore, BrokerRequest } from './requestStore';
 import { VaultOidcManager } from './auth/vaultOidcCliFlow';
@@ -28,11 +28,12 @@ export class Worker {
     const startTime = Date.now();
 
     try {
-      const serviceEntry = validateServiceExists(this.config, service);
-      if (!serviceEntry) {
+      const resolved = resolveService(this.config, service);
+      if (!resolved) {
         this.store.fail(id, `Service '${service}' not found in registry`);
         return;
       }
+      const { entry: serviceEntry, kvMount, resolvedPath } = resolved;
 
       // Step 1: Ensure we have a valid Vault token (via OIDC CLI-style flow)
       logger.info('Ensuring Vault token via OIDC login', { request_id: id, service });
@@ -60,14 +61,14 @@ export class Worker {
 
       logger.info('Reading wrapped secret from Vault', {
         request_id: id,
-        kv2_mount: serviceEntry.vault.kv2_mount,
-        kv2_path: serviceEntry.vault.kv2_path,
+        kv2_mount: kvMount,
+        kv2_path: resolvedPath,
         wrap_ttl: vaultTTL,
       });
 
       const wrapInfo = await this.vaultClient.readWrapped(
-        serviceEntry.vault.kv2_mount,
-        serviceEntry.vault.kv2_path,
+        kvMount,
+        resolvedPath,
         vaultTTL,
       );
 

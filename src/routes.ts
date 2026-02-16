@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Config, validateServiceExists, capTTL, ttlToVaultString } from './config';
+import { Config, validateServiceExists, resolveService, capTTL, ttlToVaultString } from './config';
 import { RequestStore } from './requestStore';
 import { Worker } from './worker';
 import { jwtMiddleware } from './jwtMiddleware';
@@ -25,14 +25,14 @@ export function createApiRouter(
         return;
       }
 
-      const serviceEntry = validateServiceExists(config, service);
-      if (!serviceEntry) {
+      const resolved = resolveService(config, service);
+      if (!resolved) {
         res.status(404).json({ error: `Service '${service}' not found in service registry` });
         return;
       }
 
       // Cap and validate wrap_ttl
-      const effectiveTTLMs = capTTL(wrap_ttl, serviceEntry);
+      const effectiveTTLMs = capTTL(wrap_ttl, resolved.entry);
       const effectiveTTL = ttlToVaultString(effectiveTTLMs);
 
       const request = store.create(service, reason, requester, effectiveTTL);
@@ -172,17 +172,17 @@ export function createDiagRouter(
       }
 
       const targetService = service || serviceNames[0];
-      const entry = validateServiceExists(config, targetService);
-      if (!entry) {
+      const resolved = resolveService(config, targetService);
+      if (!resolved) {
         res.status(404).json({ error: `Service '${targetService}' not found` });
         return;
       }
 
-      logger.info('Diag: test-read', { service: targetService, path: entry.vault.kv2_path });
+      logger.info('Diag: test-read', { service: targetService, path: resolved.resolvedPath });
       await oidcManager.ensureToken();
       const wrapInfo = await vaultClient.readWrapped(
-        entry.vault.kv2_mount,
-        entry.vault.kv2_path,
+        resolved.kvMount,
+        resolved.resolvedPath,
         config.vault.wrapTTL,
       );
       res.json({

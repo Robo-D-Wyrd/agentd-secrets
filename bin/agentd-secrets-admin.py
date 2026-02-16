@@ -1701,6 +1701,174 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# put-secret / get-secret subcommands
+# ---------------------------------------------------------------------------
+
+def cmd_put_secret(args: argparse.Namespace) -> int:
+    """Store a JSON secret in the Vault KV mount used by the agent."""
+    try:
+        import hvac
+    except ImportError:
+        raise SystemExit("hvac is required for put-secret. Run: pip install hvac")
+
+    config_path = Path(args.config) if args.config else default_config_path()
+    config = load_config(config_path)
+
+    vault_addr = args.vault_addr or deep_get(config, "vault.addr")
+    vault_token = args.vault_token
+    kv_mount = args.kv_mount or deep_get(config, "vault.kv_mount", "secret")
+    secret_prefix = args.secret_prefix or deep_get(config, "vault.secret_prefix", "agentd-secrets")
+
+    if not vault_addr:
+        raise SystemExit("--vault-addr or vault.addr in config is required")
+    if not vault_token:
+        raise SystemExit("--vault-token is required")
+
+    secret_name = args.name
+    if not secret_name:
+        raise SystemExit("SECRET_NAME is required")
+
+    # Read JSON value from --value, --file, or stdin
+    if args.value:
+        raw_json = args.value
+    elif args.file:
+        fpath = Path(args.file)
+        if not fpath.exists():
+            raise SystemExit(f"File not found: {args.file}")
+        raw_json = fpath.read_text(encoding="utf-8")
+    else:
+        if sys.stdin.isatty():
+            print("Reading JSON from stdin (Ctrl-D to end):", file=sys.stderr)
+        raw_json = sys.stdin.read()
+
+    try:
+        secret_data = json.loads(raw_json)
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"Invalid JSON: {e}")
+
+    if not isinstance(secret_data, dict):
+        raise SystemExit("Secret value must be a JSON object (not array or scalar)")
+
+    kv_path = f"{secret_prefix}/{secret_name}"
+
+    client = hvac.Client(url=vault_addr, token=vault_token)
+    if not client.is_authenticated():
+        raise SystemExit("Vault authentication failed (check vault addr/token).")
+
+    print(f"Writing secret to {kv_mount}/data/{kv_path}")
+    print(f"  Keys: {', '.join(secret_data.keys())}")
+
+    # KV v2 write: POST {mount}/data/{path} with {"data": {...}}
+    client.write(f"{kv_mount}/data/{kv_path}", data=secret_data)
+
+    print(f"[ok] secret written: {kv_mount}/data/{kv_path}")
+    return 0
+
+
+def cmd_get_secret(args: argparse.Namespace) -> int:
+    """Read a secret from the Vault KV mount and print as JSON."""
+    try:
+        import hvac
+    except ImportError:
+        raise SystemExit("hvac is required for get-secret. Run: pip install hvac")
+
+    config_path = Path(args.config) if args.config else default_config_path()
+    config = load_config(config_path)
+
+    vault_addr = args.vault_addr or deep_get(config, "vault.addr")
+    vault_token = args.vault_token
+    kv_mount = args.kv_mount or deep_get(config, "vault.kv_mount", "secret")
+    secret_prefix = args.secret_prefix or deep_get(config, "vault.secret_prefix", "agentd-secrets")
+
+    if not vault_addr:
+        raise SystemExit("--vault-addr or vault.addr in config is required")
+    if not vault_token:
+        raise SystemExit("--vault-token is required")
+
+    secret_name = args.name
+
+    client = hvac.Client(url=vault_addr, token=vault_token)
+    if not client.is_authenticated():
+        raise SystemExit("Vault authentication failed (check vault addr/token).")
+
+    if not secret_name:
+        # No name given — list all secret names under the prefix
+        list_path = f"{kv_mount}/metadata/{secret_prefix}"
+        try:
+            r = client.list(list_path)
+            if not r or "data" not in r:
+                print("(empty)")
+                return 0
+            for k in r["data"].get("keys", []):
+                print(k)
+        except Exception as e:
+            if "404" in str(e) or "not found" in str(e).lower():
+                print("(empty)")
+                return 0
+            raise
+        return 0
+
+    kv_path = f"{secret_prefix}/{secret_name}"
+
+    r = client.read(f"{kv_mount}/data/{kv_path}")
+    if not r or "data" not in r:
+        print(f"[not found] {kv_mount}/data/{kv_path}", file=sys.stderr)
+        return 1
+
+    inner = r["data"]
+    # KV v2 wraps in {"data": {...}, "metadata": {...}}
+    secret_data = inner.get("data", inner)
+
+    print(json.dumps(secret_data, indent=2))
+    return 0
+
+
+def cmd_list_secrets(args: argparse.Namespace) -> int:
+    """List secrets under the configured prefix in the KV mount."""
+    try:
+        import hvac
+    except ImportError:
+        raise SystemExit("hvac is required for list-secrets. Run: pip install hvac")
+
+    config_path = Path(args.config) if args.config else default_config_path()
+    config = load_config(config_path)
+
+    vault_addr = args.vault_addr or deep_get(config, "vault.addr")
+    vault_token = args.vault_token
+    kv_mount = args.kv_mount or deep_get(config, "vault.kv_mount", "secret")
+    secret_prefix = args.secret_prefix or deep_get(config, "vault.secret_prefix", "agentd-secrets")
+
+    if not vault_addr:
+        raise SystemExit("--vault-addr or vault.addr in config is required")
+    if not vault_token:
+        raise SystemExit("--vault-token is required")
+
+    client = hvac.Client(url=vault_addr, token=vault_token)
+    if not client.is_authenticated():
+        raise SystemExit("Vault authentication failed (check vault addr/token).")
+
+    list_path = f"{kv_mount}/metadata/{secret_prefix}"
+    if args.path:
+        list_path = f"{list_path}/{args.path}"
+
+    try:
+        r = client.list(list_path)
+        if not r or "data" not in r:
+            print(f"(empty)")
+            return 0
+        keys = r["data"].get("keys", [])
+        for k in keys:
+            print(k)
+    except Exception as e:
+        if "404" in str(e) or "not found" in str(e).lower():
+            print(f"(empty)")
+            return 0
+        raise
+
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -1780,6 +1948,35 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync.add_argument("--dry-run", action="store_true",
                         help="Show plan without applying (exit 2 on drift)")
 
+    # Shared args for secret commands
+    def _add_secret_args(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--vault-addr", default=None, help="Vault URL (default: from config)")
+        p.add_argument("--vault-token", required=True, help="Vault admin token")
+        p.add_argument("--kv-mount", default=None, help="KV mount (default: from config)")
+        p.add_argument("--secret-prefix", default=None, help="Prefix under KV mount (default: from config)")
+
+    # -- put-secret ----------------------------------------------------------
+    p_put = subs.add_parser("put-secret", help="Store a JSON secret in the Vault KV mount")
+    _add_secret_args(p_put)
+    p_put.add_argument("name", metavar="SECRET_NAME",
+                       help="Secret name (path relative to secret_prefix)")
+    p_put.add_argument("--value", "-v", default=None,
+                       help="JSON string value (inline)")
+    p_put.add_argument("--file", "-f", default=None,
+                       help="Path to JSON file")
+
+    # -- get-secret ----------------------------------------------------------
+    p_get = subs.add_parser("get-secret", help="Read a secret from the Vault KV mount")
+    _add_secret_args(p_get)
+    p_get.add_argument("name", metavar="SECRET_NAME", nargs="?", default=None,
+                       help="Secret name (omit to list all secret names)")
+
+    # -- list-secrets --------------------------------------------------------
+    p_ls = subs.add_parser("list-secrets", help="List secrets under the configured prefix")
+    _add_secret_args(p_ls)
+    p_ls.add_argument("path", metavar="PATH", nargs="?", default=None,
+                      help="Subpath to list (default: list root of secret_prefix)")
+
     return parser
 
 
@@ -1805,6 +2002,9 @@ def main() -> int:
         "create-values": cmd_create_values,
         "vault-setup": cmd_vault_setup,
         "sync": cmd_sync,
+        "put-secret": cmd_put_secret,
+        "get-secret": cmd_get_secret,
+        "list-secrets": cmd_list_secrets,
     }
 
     return dispatch[args.command](args)

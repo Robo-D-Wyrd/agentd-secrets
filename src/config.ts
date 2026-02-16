@@ -4,7 +4,7 @@ import logger from './logger';
 
 export interface ServiceEntry {
   vault: {
-    kv2_mount: string;
+    kv2_mount?: string;  // optional override; defaults to config.vault.kvMount
     kv2_path: string;
   };
   authz?: {
@@ -168,8 +168,53 @@ export function loadConfig(): Config {
   };
 }
 
+export interface ResolvedService {
+  entry: ServiceEntry;
+  kvMount: string;        // effective KV mount
+  resolvedPath: string;   // full kv2_path including sub-key
+  registryKey: string;    // the service registry key that matched
+}
+
+/**
+ * Resolve a service name to a registry entry.
+ *
+ * Supports sub-key addressing:  "logins/github" matches the "logins"
+ * registry entry and appends "/github" to its kv2_path.  This lets a
+ * single registry entry cover many secrets under one prefix.
+ *
+ * An exact match is tried first, then a prefix match on the first "/".
+ */
+export function resolveService(config: Config, serviceName: string): ResolvedService | null {
+  const services = config.serviceRegistry.services;
+
+  const defaultMount = config.vault.kvMount;
+
+  // Exact match
+  if (services[serviceName]) {
+    const entry = services[serviceName];
+    const kvMount = entry.vault.kv2_mount || defaultMount;
+    return { entry, kvMount, resolvedPath: entry.vault.kv2_path, registryKey: serviceName };
+  }
+
+  // Prefix match: "logins/github" → key="logins", subKey="github"
+  const slashIdx = serviceName.indexOf('/');
+  if (slashIdx > 0) {
+    const key = serviceName.substring(0, slashIdx);
+    const subKey = serviceName.substring(slashIdx + 1);
+    if (subKey && services[key]) {
+      const entry = services[key];
+      const kvMount = entry.vault.kv2_mount || defaultMount;
+      const resolvedPath = `${entry.vault.kv2_path}/${subKey}`;
+      return { entry, kvMount, resolvedPath, registryKey: key };
+    }
+  }
+
+  return null;
+}
+
 export function validateServiceExists(config: Config, serviceName: string): ServiceEntry | null {
-  return config.serviceRegistry.services[serviceName] || null;
+  const resolved = resolveService(config, serviceName);
+  return resolved ? resolved.entry : null;
 }
 
 logger.debug('Config module loaded');

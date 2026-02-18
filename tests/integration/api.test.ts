@@ -98,7 +98,7 @@ describe('API Integration Tests', () => {
     const app = express();
     app.use(express.json());
     app.use(createHealthRouter(config, vaultClient));
-    app.use(createApiRouter(config, store, worker));
+    app.use(createApiRouter(config, store, worker, vaultClient, mockOidcManager));
 
     appServer = await new Promise<http.Server>((resolve) => {
       const s = app.listen(0, '127.0.0.1', () => resolve(s));

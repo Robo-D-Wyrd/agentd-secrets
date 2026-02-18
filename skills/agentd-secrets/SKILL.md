@@ -12,6 +12,21 @@ curl -s http://agentd-secrets:8080/
 
 This returns the full API schema, available services, and the Vault address for unwrapping.
 
+To list all available services including sub-keys (e.g. `logins/google`, `logins/github`):
+
+```bash
+curl -s http://agentd-secrets:8080/v1/services
+```
+
+Response:
+```json
+{
+  "services": ["logins/github", "logins/google"]
+}
+```
+
+Note: This endpoint triggers an OIDC/Duo login if no valid Vault token is cached.
+
 ## Step-by-Step: Obtain a Secret
 
 ### 1. Request the secret
@@ -103,6 +118,7 @@ The actual secret is in `.data.data` (Vault KV v2 nesting). The wrap token can o
 | Action | Method | Path | Auth |
 |--------|--------|------|------|
 | Discover API | GET | `/` | None |
+| List services | GET | `/v1/services` | None (triggers Duo if needed) |
 | Request secret | POST | `/v1/requests` | None |
 | Poll status | GET | `/v1/requests/:id` | None |
 | Health check | GET | `/healthz` | None |

@@ -11,6 +11,8 @@ export function createApiRouter(
   config: Config,
   store: RequestStore,
   worker: Worker,
+  vaultClient: VaultClient,
+  oidcManager: VaultOidcManager,
 ): Router {
   const router = Router();
 
@@ -71,6 +73,40 @@ export function createApiRouter(
     }
   });
 
+  // GET /v1/services — list all available services (including sub-keys from Vault)
+  router.get('/v1/services', async (_req: Request, res: Response) => {
+    try {
+      await oidcManager.ensureToken();
+
+      const services: string[] = [];
+      const registry = config.serviceRegistry.services;
+      const defaultMount = config.vault.kvMount;
+
+      for (const [registryKey, entry] of Object.entries(registry)) {
+        const kvMount = entry.vault.kv2_mount || defaultMount;
+        const kv2Path = entry.vault.kv2_path;
+
+        const keys = await vaultClient.listKeys(kvMount, kv2Path);
+        if (keys.length > 0) {
+          for (const key of keys) {
+            // Strip trailing slash from directory markers
+            const clean = key.replace(/\/$/, '');
+            services.push(`${registryKey}/${clean}`);
+          }
+        } else {
+          // No sub-keys — include the top-level entry itself
+          services.push(registryKey);
+        }
+      }
+
+      services.sort();
+      res.json({ services });
+    } catch (err) {
+      logger.error('Error listing services', { error: (err as Error).message });
+      res.status(500).json({ error: 'Failed to list services' });
+    }
+  });
+
   return router;
 }
 
@@ -99,6 +135,10 @@ export function createHealthRouter(config: Config, vaultClient: VaultClient): Ro
           response: '200 { request_id, service, requester, status, created_at, wrap_token?, wrap_expires_at?, failure_reason? }',
           statuses: ['PENDING_APPROVAL', 'APPROVED', 'DENIED', 'EXPIRED', 'FAILED'],
           usage: 'Use wrap_token with Vault unwrap API: POST <vault_addr>/v1/sys/wrapping/unwrap with X-Vault-Token header. The wrap_token is single-use.',
+        },
+        'GET /v1/services': {
+          description: 'List all available services including sub-keys discovered from Vault. Triggers OIDC/Duo login if no valid token is cached.',
+          response: '200 { services: string[] }',
         },
         'GET /healthz': { description: 'Liveness check' },
         'GET /readyz': { description: 'Readiness check (OIDC + Vault connectivity)' },

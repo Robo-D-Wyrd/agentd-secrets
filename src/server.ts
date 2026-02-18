@@ -66,7 +66,7 @@ async function main() {
 
   // Mount routes
   app.use(createHealthRouter(config, vaultClient));
-  app.use(createApiRouter(config, store, worker));
+  app.use(createApiRouter(config, store, worker, vaultClient, oidcManager));
   app.use(createDiagRouter(config, vaultClient, oidcManager));
 
   // Start server

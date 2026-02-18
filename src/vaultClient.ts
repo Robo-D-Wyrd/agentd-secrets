@@ -91,6 +91,33 @@ export class VaultClient {
     return this.cachedToken.clientToken;
   }
 
+  async listKeys(kv2Mount: string, kv2Path: string): Promise<string[]> {
+    const token = await this.getToken();
+    const url = `${this.addr}/v1/${kv2Mount}/metadata/${kv2Path}`;
+
+    const resp = await fetch(url, {
+      method: 'LIST',
+      headers: {
+        'X-Vault-Token': token,
+      },
+    });
+
+    if (resp.status === 404) {
+      return [];
+    }
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Vault KV list failed: ${resp.status} ${text}`);
+    }
+
+    const data = await resp.json() as {
+      data: { keys: string[] };
+    };
+
+    return data.data?.keys ?? [];
+  }
+
   async readWrapped(kv2Mount: string, kv2Path: string, wrapTTL: string): Promise<VaultWrapInfo> {
     const token = await this.getToken();
     const url = `${this.addr}/v1/${kv2Mount}/data/${kv2Path}`;
